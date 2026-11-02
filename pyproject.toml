@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-memory"
+version = "0.2.0"
+description = "Local, evidence-gated memory for AI agents: full-text recall over your notes and past agent sessions."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Joel Brilliant"}]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/joelbrilliant/agent-memory"
+
+[project.scripts]
+agent-memory = "agent_memory.cli:main"
+# The old script names stay, as aliases.
+recall = "agent_memory.cli:recall_main"
+remember = "agent_memory.cli:remember_main"
+session-memory = "agent_memory.cli:session_main"
+
+[tool.setuptools]
+packages = ["agent_memory"]
+py-modules = ["ingest", "mcp_server", "session_adapters", "session_continuity", "db_permissions"]

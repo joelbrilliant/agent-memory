@@ -1,0 +1,16 @@
+index.db
+sessions.db
+sessions.db-shm
+sessions.db-wal
+usage.log
+hook.log
+ingest.log
+__pycache__/
+.DS_Store
+corpus.txt
+exclude.txt
+hook-exclude.txt
+
+# Build output
+build/
+*.egg-info/
