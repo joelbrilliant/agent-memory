@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-memory"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local, evidence-gated memory for AI agents: full-text recall over your notes and past agent sessions."
 readme = "README.md"
 license = "Apache-2.0"

@@ -11,8 +11,8 @@ Two options, use both:
 - A line in your CLAUDE.md or a skill so deliberate recall happens at task
   start - see [agent-instructions.md](agent-instructions.md).
 
-The hook can inject a relevant excerpt from another local harness. Connecting agent memory (`agent-memory connect claude`) also gives Claude the explicit `session_recall` and
-`session_list` tools.
+The hook can inject a relevant excerpt from another local harness. Connecting agent memory (`agent-memory connect claude`) also gives Claude the explicit `session_recall`,
+`session_read` and `session_list` tools.
 
 ## Hermes Agent
 

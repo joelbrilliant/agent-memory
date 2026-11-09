@@ -58,9 +58,10 @@ class ReleaseFilesTest(unittest.TestCase):
                                   capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
         summary = json.loads(done.stdout)
-        self.assertEqual(summary["questions"], 1)
-        for mode in ("today", "per_message", "any_word"):
-            self.assertEqual(summary["recall_any"][mode]["@5"], 1.0, mode)
+        self.assertEqual((summary["questions"], summary["answerable"]), (1, 1))
+        for mode in ("all_first", "any_word", "all_first_per_message", "any_word_per_message", "recall_sessions"):
+            self.assertEqual(summary["strict_recall_all"][mode]["@5"], "1/1 = 100.00%", mode)
+            self.assertEqual(summary["any_hit_recall_any"][mode]["@5"], "1/1 = 100.00%", mode)
 
     def test_no_results_file_of_private_origin_ships(self):
         self.assertEqual(sorted(path.name for path in (ROOT / "benchmarks").iterdir() if path.suffix != ".pyc" and path.is_file()),

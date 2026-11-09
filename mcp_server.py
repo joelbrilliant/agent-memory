@@ -70,7 +70,9 @@ TOOLS = [
             "Code, Codex and Grok sessions. Use when the user resumes prior "
             "work, switches harnesses, or asks what was decided in an earlier "
             "conversation. Retrieval is deterministic SQLite FTS5 with no LLM "
-            "memory layer. Results are transcript leads, not authority. " + BRAIN_HINT
+            "memory layer. Results are transcript leads, not authority. Each "
+            "excerpt shows its message number (#12); open the conversation "
+            "around it with session_read. " + BRAIN_HINT
         ),
         "inputSchema": {
             "type": "object",
@@ -82,6 +84,14 @@ TOOLS = [
                 "k": {
                     "type": "integer",
                     "description": "Max session groups (default 5)",
+                },
+                "since": {
+                    "type": "string",
+                    "description": "Only messages on or after this local date, YYYY-MM-DD",
+                },
+                "until": {
+                    "type": "string",
+                    "description": "Only messages on or before this local date, YYYY-MM-DD",
                 },
                 "harness": {
                     "type": "string",
@@ -98,6 +108,30 @@ TOOLS = [
                 },
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "session_read",
+        "description": (
+            "Read one indexed session's user and assistant dialogue in order, "
+            "by the session id that session_recall or session_list printed. "
+            "Start a few messages before an excerpt's number to see what led "
+            "up to it. Long sessions come in pages; the reply says where the "
+            "next page starts."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "description": "Session id as printed"},
+                "harness": {
+                    "type": "string",
+                    "enum": ["hermes", "claude", "codex", "grok"],
+                    "description": "Needed only if the id is in more than one harness",
+                },
+                "start": {"type": "integer", "description": "First message number (default 1)"},
+                "limit": {"type": "integer", "description": "Max messages (default 40, up to 200)"},
+            },
+            "required": ["session_id"],
         },
     },
     {
@@ -196,11 +230,29 @@ def call_tool(name, args):
             "harness",
             "current_harness",
             "current_session_id",
+            "since",
+            "until",
         ):
             value = args.get(option)
             if value:
                 cmd += ["--" + option.replace("_", "-"), str(value)]
         return run_cli(cmd)
+    if name == "session_read":
+        session_id = str(args.get("session_id") or "").strip()
+        if not session_id:
+            return "error: session_id is required", True
+        cmd = [
+            sys.executable,
+            *SESSION_MEMORY,
+            "read",
+            "--start",
+            str(int(args.get("start") or 1)),
+            "-n",
+            str(int(args.get("limit") or 40)),
+        ]
+        if args.get("harness"):
+            cmd += ["--harness", str(args["harness"])]
+        return run_cli(cmd + ["--", session_id])
     if name == "session_list":
         cmd = [
             sys.executable,

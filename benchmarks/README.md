@@ -12,7 +12,13 @@ results file: you fetch the dataset yourself, so the number you get is one you r
 python3 -I benchmarks/longmemeval_compare.py longmemeval_s_cleaned.json --out my-run.json
 ```
 
-It ranks sessions three ways with agent-memory's own search rules (`fts_terms` in `session_continuity.py`: all
-terms first, any term only when nothing matches, BM25 over FTS5 with the porter tokenizer) and prints recall_any@5
-and @10 for each. `--mempalace results.jsonl` adds another system's published per-question results beside them, if
-you have that file.
+It ranks sessions five ways. The `recall_sessions` arm calls agent-memory's real session recall
+(`recall_sessions` in `session_continuity.py`: any term, BM25 over FTS5 with the porter tokenizer, one row per
+message). The others reimplement the ranking on one document per session or one row per message, with all terms
+first or any term, for comparison.
+
+It prints two metrics for each, labelled. `recall_all@5` and `@10` are strict, the benchmark's own metric: every
+answer session in the top k, on the 470 answerable questions. Quote this one. `recall_any@5` and `@10` are any-hit,
+the easier metric: at least one answer session in the top k, on all 500 questions. Any-hit is not the strict number.
+
+`--mempalace results.jsonl` adds another system's published per-question results beside them, if you have that file.

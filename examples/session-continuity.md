@@ -62,7 +62,13 @@ agent-memory session sync
 agent-memory session list -n 20
 agent-memory session recall "distinctive terms" -k 5
 agent-memory session recall "distinctive terms" --harness claude
+agent-memory session recall "distinctive terms" --since 2026-10-01 --until 2026-10-31
+agent-memory session read <session-id> --start 8
 ```
+
+Dates are local and both ends are included. Each recall excerpt shows its
+message number, such as `#12`, and `read` shows the conversation from a chosen
+message, 40 messages at a time.
 
 Initial sync scans all available local histories. Later syncs fingerprint
 sources and replace only changed sessions.

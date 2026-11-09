@@ -11,7 +11,11 @@ from unittest.mock import patch
 
 from session_continuity import (
     SessionRoots,
+    connect,
+    day_end,
+    day_start,
     list_sessions,
+    read_session,
     recall_sessions,
     sync_index,
 )
@@ -582,6 +586,164 @@ class SessionContinuityTest(unittest.TestCase):
         )
         self.assertEqual(excluded, [])
 
+    def _write_kestrel_sessions(self):
+        conn = sqlite3.connect(self.hermes_db)
+        for session_id, started, content in (
+            (
+                "hermes-long-note",
+                900.0,
+                "Handover note: kestrel ledger migration status, plus the weekly "
+                "rota, the printer, the garden roster and the lunch order.",
+            ),
+            ("hermes-short-answer", 910.0, "The kestrel ledger moved to the shared drive."),
+        ):
+            conn.execute(
+                "INSERT INTO sessions(id, source, started_at, title, cwd) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (session_id, "cli", started, "", "/work/hermes"),
+            )
+            conn.execute(
+                "INSERT INTO messages(session_id, role, content, timestamp) "
+                "VALUES (?, ?, ?, ?)",
+                (session_id, "user", content, started + 1),
+            )
+        conn.commit()
+        conn.close()
+        sync_index(self.session_db, self.roots)
+
+    def test_recall_ranks_by_any_term_when_another_session_holds_every_term(self):
+        self._write_kestrel_sessions()
+
+        hits = recall_sessions(
+            self.session_db,
+            "kestrel ledger migration",
+            limit=5,
+            sync=False,
+        )
+
+        self.assertEqual(
+            {hit.session_id for hit in hits},
+            {"hermes-long-note", "hermes-short-answer"},
+        )
+        self.assertEqual(hits[0].session_id, "hermes-long-note")
+
+    def test_hook_recall_keeps_every_term_first(self):
+        self._write_kestrel_sessions()
+
+        output = self._run_hook(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "claude-current",
+                "prompt": "What is the status of the kestrel ledger migration now?",
+            },
+            "claude",
+        )
+
+        context = json.loads(output)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("hermes-long-note", context)
+        self.assertNotIn("hermes-short-answer", context)
+
+    def _write_hermes_session(self, session_id, messages):
+        conn = sqlite3.connect(self.hermes_db)
+        conn.execute(
+            "INSERT INTO sessions(id, source, started_at, title, cwd) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (session_id, "cli", messages[0][2], "", "/work/hermes"),
+        )
+        conn.executemany(
+            "INSERT INTO messages(session_id, role, content, timestamp) "
+            "VALUES (?, ?, ?, ?)",
+            [(session_id, role, content, timestamp) for role, content, timestamp in messages],
+        )
+        conn.commit()
+        conn.close()
+        sync_index(self.session_db, self.roots)
+
+    def test_recall_excerpt_carries_its_message_number(self):
+        sync_index(self.session_db, self.roots)
+        hits = recall_sessions(
+            self.session_db,
+            "logical conversation rotating",
+            limit=5,
+            sync=False,
+        )
+        excerpt = [m for m in hits[0].messages if m.role == "assistant"][0]
+        page = read_session(self.session_db, "hermes-human")
+        self.assertEqual(
+            page.messages[excerpt.position - 1].text,
+            "Keep the logical conversation while rotating context segments.",
+        )
+
+    def test_read_session_pages_dialogue_in_order(self):
+        base = day_start("2026-03-10") + 3600
+        self._write_hermes_session(
+            "hermes-pages",
+            [
+                ("user" if index % 2 == 0 else "assistant", "osprey step %d" % index, base + index)
+                for index in range(5)
+            ],
+        )
+
+        first = read_session(self.session_db, "hermes-pages", limit=2)
+        self.assertEqual(first.session.message_count, 5)
+        self.assertEqual(
+            [(m.position, m.role, m.text) for m in first.messages],
+            [(1, "user", "osprey step 0"), (2, "assistant", "osprey step 1")],
+        )
+        self.assertEqual(first.next_start, 3)
+
+        last = read_session(self.session_db, "hermes-pages", start=3, limit=40)
+        self.assertEqual([m.position for m in last.messages], [3, 4, 5])
+        self.assertIsNone(last.next_start)
+
+        capped = read_session(self.session_db, "hermes-pages", max_chars=20)
+        self.assertEqual(len(capped.messages), 1)
+        self.assertEqual(capped.next_start, 2)
+
+        self.assertIsNone(read_session(self.session_db, "no-such-session"))
+
+    def test_read_session_asks_for_a_harness_when_an_id_repeats(self):
+        sync_index(self.session_db, self.roots)
+        conn = connect(self.session_db)
+        conn.execute(
+            "INSERT INTO session_sources(harness, session_id, source_path, fingerprint) "
+            "VALUES ('grok', 'hermes-human', '/elsewhere', 'x')"
+        )
+        conn.commit()
+        conn.close()
+
+        with self.assertRaises(ValueError):
+            read_session(self.session_db, "hermes-human")
+        page = read_session(self.session_db, "hermes-human", harness="hermes")
+        self.assertEqual(page.session.harness, "hermes")
+
+    def test_recall_keeps_only_messages_inside_the_dates(self):
+        self._write_hermes_session(
+            "hermes-march-10",
+            [("user", "heron budget agreed at forty", day_start("2026-03-10") + 600)],
+        )
+        self._write_hermes_session(
+            "hermes-march-12",
+            [("user", "heron budget raised to fifty", day_end("2026-03-12") - 600)],
+        )
+
+        def ids(**dates):
+            return sorted(
+                hit.session_id
+                for hit in recall_sessions(
+                    self.session_db, "heron budget", limit=5, sync=False, **dates
+                )
+            )
+
+        self.assertEqual(ids(), ["hermes-march-10", "hermes-march-12"])
+        self.assertEqual(ids(since=day_start("2026-03-11")), ["hermes-march-12"])
+        self.assertEqual(ids(before=day_end("2026-03-10")), ["hermes-march-10"])
+        self.assertEqual(
+            ids(since=day_start("2026-03-12"), before=day_end("2026-03-12")),
+            ["hermes-march-12"],
+        )
+        self.assertEqual(ids(since=day_start("2026-03-13")), [])
+
     def test_recall_collapses_identical_cross_session_evidence(self):
         duplicate_path = self.codex_root / "duplicate.jsonl"
         self._jsonl(
@@ -746,6 +908,60 @@ class SessionContinuityTest(unittest.TestCase):
         text = response["result"]["content"][0]["text"]
         self.assertIn("[codex]", text)
         self.assertIn("codex-one", text)
+
+    def test_mcp_session_read_and_recall_dates(self):
+        sync_index(self.session_db, self.roots)
+        env = os.environ.copy()
+        env.update(
+            {
+                "AGENT_SESSION_DB": str(self.session_db),
+                "AGENT_MEMORY_USAGE_LOG": str(self.root / "usage.log"),
+                "HERMES_SESSION_DB": str(self.hermes_db),
+                "CLAUDE_PROJECTS_ROOT": str(self.claude_root),
+                "CODEX_SESSIONS_ROOT": str(self.codex_root),
+                "GROK_SESSIONS_ROOT": str(self.grok_root),
+            }
+        )
+        server = Path(__file__).resolve().parents[1] / "mcp_server.py"
+
+        def call(name, arguments):
+            request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            }
+            completed = subprocess.run(
+                [sys.executable, str(server)],
+                input=json.dumps(request) + "\n",
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+            return json.loads(completed.stdout)["result"]
+
+        first = call("session_read", {"session_id": "hermes-human", "limit": 1})
+        self.assertFalse(first["isError"])
+        self.assertIn("start from #2", first["content"][0]["text"])
+        second = call("session_read", {"session_id": "hermes-human", "start": 2})
+        text = second["content"][0]["text"]
+        self.assertIn("#2 assistant", text)
+        self.assertIn("Keep the logical conversation", text)
+        self.assertNotIn("start from", text)
+
+        missing = call("session_read", {"session_id": "no-such-session"})
+        self.assertTrue(missing["isError"])
+
+        recent = call(
+            "session_recall",
+            {"query": "logical conversation rotating", "since": "2999-01-01"},
+        )
+        self.assertFalse(recent["isError"])
+        self.assertEqual(recent["content"][0]["text"], "no session results")
+
+        bad = call("session_recall", {"query": "logical", "since": "March"})
+        self.assertTrue(bad["isError"])
 
     def test_hook_emits_native_claude_and_hermes_response_shapes(self):
         claude_output = self._run_hook(

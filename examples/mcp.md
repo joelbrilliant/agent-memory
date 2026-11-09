@@ -8,7 +8,7 @@ there is exactly one implementation of the query and write logic. Because it
 shells out to `recall`, MCP-driven recalls land in `usage.log` like any other
 deliberate call, which keeps the self-audit honest.
 
-It registers itself under the server name `agent-memory` and offers four tools:
+It registers itself under the server name `agent-memory` and offers five tools:
 
 - `recall` - inputs: `query` (required), `k` (optional), `source` (optional
   corpus-tag filter).
@@ -16,7 +16,11 @@ It registers itself under the server name `agent-memory` and offers four tools:
   (optional). The underlying tool still refuses to write without evidence, so a
   `remember` call missing evidence comes back as an error result, not a write.
 - `session_recall` - inputs: `query` (required), `k`, `harness`,
-  `current_harness` and `current_session_id` (optional).
+  `current_harness`, `current_session_id`, and `since` and `until` as
+  YYYY-MM-DD dates (optional).
+- `session_read` - inputs: `session_id` (required), `harness`, `start` and
+  `limit` (optional). Returns the session's dialogue in order, one page at a
+  time.
 - `session_list` - inputs: `limit`, `harness` and `sync` (optional).
 
 Installed, it keeps the index in `~/.local/share/agent-memory`. Override the index or root with `AGENT_MEMORY_DB` and `AGENT_MEMORY_ROOT` if you keep them elsewhere.
@@ -70,4 +74,4 @@ printf '%s\n%s\n' \
 ```
 
 You should get an `initialize` result followed by a `tools/list` result naming
-`recall`, `remember`, `session_recall` and `session_list`.
+`recall`, `remember`, `session_recall`, `session_read` and `session_list`.

@@ -215,6 +215,7 @@ def relevant_session_hits(
             current_harness=harness,
             current_session_id=current_session_id,
             sync=True,
+            all_terms_first=True,
         )
     except (OSError, sqlite3.Error):
         return []

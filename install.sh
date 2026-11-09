@@ -12,7 +12,7 @@ set -eu
 
 UV_VERSION="0.11.6"  # pinned, at least two weeks old when chosen, bumped on purpose
 UV_MIN="0.9.0"       # a uv on PATH older than this is passed over for the pinned copy
-VERSION="0.2.0"
+VERSION="0.2.1"
 PYTHON="3.13"
 # For tests only: a different folder (an http:// or file:// address) holding the wheel and SHA256SUMS.
 BASE="${AGENT_MEMORY_INSTALL_BASE_URL:-https://github.com/joelbrilliant/agent-memory/releases/download/v$VERSION}"

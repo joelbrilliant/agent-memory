@@ -114,6 +114,15 @@ uv tool uninstall agent-memory
 
 Your data stays in `~/.local/share/agent-memory` and `~/.config/agent-memory` until you delete those folders.
 
+## Changes
+
+- 0.2.1:
+  - Session recall ranks by any term, so a message that misses one word of the query is still found. The auto-recall hook still tries every term first.
+  - `session_read` (`agent-memory session read <session-id> --start 8`) returns a session's dialogue in order, 40 messages a page, and each recall excerpt shows its message number.
+  - Session recall takes `since` and `until` dates (`--since 2026-10-01 --until 2026-10-31`, local days, both included).
+  - Hermes session discovery also finds the sessions current Hermes Agent writes with `source = 'local'` and the surface (cli, telegram and so on) in a `created_source` column. Older `state.db` files, and rows migrated from them, are read as before, and an untitled Hermes session is named after its surface.
+- 0.2.0: first public release.
+
 ## Working from a clone
 
 The code is in this repository: `agent_memory/` (the command), `ingest.py`, `mcp_server.py`, `session_adapters.py` and `session_continuity.py`. `./test.sh` runs the smoke test and the unit tests, and `python -m pytest tests/test_package.py` needs `uv` and builds and installs a wheel into a temporary folder. The scripts `recall`, `remember` and `session-memory` in the root also run straight from a clone, keeping their files beside them.
